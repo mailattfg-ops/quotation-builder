@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/quotation", "destination": "/quotation-generator.html" },
+    { "source": "/", "destination": "/ai_video_strategy_analysis.html" }
+  ]
+}

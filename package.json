@@ -1,0 +1,13 @@
+{
+  "name": "tfg-quotation-builder",
+  "version": "1.0.0",
+  "description": "Think Forge Global — branded quotation and business proposal generator",
+  "scripts": {
+    "start": "npx serve -p 3000 .",
+    "dev": "npx serve -p 3000 ."
+  },
+  "keywords": ["quotation", "pdf", "generator", "think-forge-global"],
+  "author": "Think Forge Global",
+  "license": "UNLICENSED",
+  "private": true
+}
