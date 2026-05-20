@@ -1,19 +1,19 @@
 # Think Forge Global — Quotation Builder
 
-A single-file web app that generates branded quotation and business proposal PDFs for Think Forge Global. No build step, no server, no dependencies to install — open the HTML file and it works.
+A single-file web app that generates branded PDF quotations and business proposals for Think Forge Global. No build step, no server, no dependencies to install — open the HTML file and it works.
 
 ---
 
 ## Quick Start
 
-**Local preview (recommended)**
+**Local server (recommended)**
 
 ```bash
-npx serve -p 3000 .
-# open http://localhost:3000/quotation-generator.html
+npm start
+# opens at http://localhost:3000
 ```
 
-Or simply open `quotation-generator.html` directly in a browser (file://) — everything is self-contained.
+Or open `quotation-generator.html` directly in a browser (`file://`) — everything is self-contained.
 
 **Deploy to Vercel**
 
@@ -21,9 +21,8 @@ Or simply open `quotation-generator.html` directly in a browser (file://) — ev
 npx vercel
 ```
 
-Routes are already configured in `vercel.json`:
-- `/` → `ai_video_strategy_analysis.html` (company homepage — separate project)
-- `/quotation` → `quotation-generator.html` (this app)
+Routes are configured in `vercel.json`:
+- `/` → `quotation-generator.html`
 
 ---
 
@@ -31,58 +30,116 @@ Routes are already configured in `vercel.json`:
 
 ```
 quotation-builder/
-├── quotation-generator.html   # The entire app — HTML + CSS + JS in one file
+├── quotation-generator.html   # Entire app — HTML + CSS + JS in one file
+├── package.json               # npm start script (npx serve)
 ├── vercel.json                # Vercel routing config
-├── tfg-logo.png               # Think Forge Global wordmark (source asset)
-├── reference-design.pdf       # Original PDF the design is based on
+├── tfg-logo.png               # TFG wordmark (source asset — not loaded at runtime)
+├── reference-design.pdf       # Original design reference
 └── README.md
 ```
 
-> The logo PNG and reference PDF are **not** loaded at runtime. The logo is base64-embedded inside `quotation-generator.html` (search for `const LOGO_B64`). The reference PDF is kept for design reference only.
+> The logo PNG is base64-embedded inside `quotation-generator.html` (`const LOGO_B64`). The reference PDF is kept for design reference only and is not used by the app.
 
 ---
 
 ## How It Works
 
-The app is entirely self-contained in `quotation-generator.html`:
+The app is entirely self-contained in `quotation-generator.html`. On load, a **landing screen** presents two paths:
 
-- **Sidebar form** (420 px) — 7 tabs: Client, Overview, Objectives, Services, Pricing, Scope, Closing
-- **Live preview pane** — rebuilds all pages on every keystroke via `updatePreview()`
-- **PDF export** — clones the preview DOM and passes it to [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) (loaded from CDN)
+### Create New
+Fill out the continuous scrollable form, toggle the live preview on/off, then **Save as PDF** via the browser print dialog (choose *Save as PDF* as the destination, margins set to *None*).
 
-### Document modes
+### Edit Existing
+Upload any PDF previously exported from this tool. The app uses **PDF.js** (loaded lazily from CDN) to extract a hidden state JSON embedded in the PDF at generation time, restores every form field automatically, and drops you into the editing flow with an **EDITING** badge in the header.
 
-| Mode | Cover style |
-|------|-------------|
-| **Quotation** | Clean — large client name, city photo diagonal right, TFG logo top-left |
-| **Business Proposal** | Full design — "BUSINESS PROPOSAL" headline, photo with diagonal cut, red accent bars, TFG logo bottom-left |
+---
 
-### Service content modes
+## Document Types
+
+| Type | Pages | Description |
+|------|-------|-------------|
+| **Initial Quotation** | 1–2 | Short plain-language brief for first contact. No cover page. Shows: overview, what's included (grid), price, timeline, next steps. |
+| **Quotation** | 6 | Full document with styled cover, overview, objectives, feature table or service sections, pricing, scope & assumptions, signature page, back cover. |
+| **Business Proposal** | 6 | Same as Quotation but with the Business Proposal cover style, closing note, and investment summary table. |
+
+---
+
+## Form Structure (continuous flow)
+
+All sections scroll in a single sidebar — no tabs. Sections shown/hidden automatically based on document type:
+
+| Section | Initial | Quotation | Proposal |
+|---------|---------|-----------|----------|
+| Document Type | ✓ | ✓ | ✓ |
+| Client Details | ✓ | ✓ | ✓ |
+| Cover Images | — | ✓ | ✓ |
+| Project Overview | ✓ | ✓ | ✓ |
+| Project Objectives | — | ✓ | ✓ |
+| Key Deliverables | ✓ | — | — |
+| Features / Services | — | ✓ | ✓ |
+| Pricing & Investment | ✓ | ✓ | ✓ |
+| Investment Summary | — | — | ✓ |
+| Scope & Assumptions | — | ✓ | ✓ |
+| Closing / Next Steps | ✓ | ✓ | ✓ |
+| Closing Note | — | — | ✓ |
+| Expected Outcomes | — | ✓ | ✓ |
+
+---
+
+## Service Content Modes (Quotation & Proposal)
 
 | Mode | Description |
 |------|-------------|
 | **Feature Table** | Single or dual-plan comparison table |
-| **Service Sections** | Free-form sections with bullet points |
+| **Service Sections** | Free-form sections with bullet points, timeline, and cost per section |
 
 ---
 
-## Key Variables (inside `quotation-generator.html`)
+## Preview Toggle
 
-| Variable | Line | Purpose |
-|----------|------|---------|
-| `LOGO_B64` | ~460 | Base64-encoded TFG logo PNG |
-| `CITY_B64` | ~461 | Base64-encoded city skyline (default cover photo) |
-| `docType` | state | `'quotation'` or `'proposal'` |
-| `serviceMode` | state | `'table'` or `'sections'` |
-| `planMode` | state | `'single'` or `'dual'` |
-| `frontCoverImg` | state | User-uploaded front cover photo (overrides `CITY_B64`) |
-| `backCoverImg` | state | User-uploaded back cover photo |
+The preview pane is **hidden by default**. The sidebar centers on screen. Click **◧ Preview** in the action bar to open the live preview alongside the form. Click **✕ Hide Preview** to close it and return to centered form mode.
+
+---
+
+## Edit Existing Document (Round-Trip)
+
+Every PDF exported from this tool contains an invisible embedded state snapshot. When a PDF is uploaded via the Edit flow:
+
+1. PDF.js extracts the full text layer from the PDF
+2. The app locates `__TFG_STATE_START__` / `__TFG_STATE_END__` markers
+3. The base64-encoded JSON between the markers is decoded
+4. All form fields, dynamic lists, toggles, and uploaded images are restored exactly
+
+**Only PDFs exported from this tool are supported.** Uploading any other PDF will show a clear error message.
+
+---
+
+## PDF Export
+
+- **Page size**: exactly A4 (`210mm × 297mm`) — enforced via `@media print` CSS
+- **Engine**: native browser print (`window.print()`) — vector quality, fully selectable text, no quality loss
+- **How to save**: click *Save as PDF* → browser print dialog → set destination to *Save as PDF*, margins to *None*
+
+---
+
+## Key Constants & State (inside `quotation-generator.html`)
+
+| Name | Purpose |
+|------|---------|
+| `LOGO_B64` | Base64-encoded TFG logo PNG |
+| `IMG_PLACEHOLDER` | Inline SVG shown when no cover photo is uploaded |
+| `docType` | `'initial'` / `'quotation'` / `'proposal'` |
+| `serviceMode` | `'table'` / `'sections'` |
+| `planMode` | `'single'` / `'dual'` |
+| `frontCoverImg` | User-uploaded front cover photo (base64) |
+| `backCoverImg` | User-uploaded back cover photo (base64) |
+| `previewVisible` | Whether the preview pane is shown |
 
 ---
 
 ## Updating the Logo
 
-1. Convert the new PNG to base64:
+1. Convert your new PNG to base64:
    ```bash
    python3 -c "import base64; print('data:image/png;base64,' + base64.b64encode(open('new-logo.png','rb').read()).decode())"
    ```
@@ -93,48 +150,32 @@ The app is entirely self-contained in `quotation-generator.html`:
 
 ## Updating Company Contact Details
 
-Search `quotation-generator.html` for:
+Search `quotation-generator.html` for and replace all occurrences of:
 - `www.thinkforgeglobal.com`
 - `mail@thinkforgeglobal.com`
 - `+91 97450 04161`
 
-Replace all occurrences (there are ~6–8).
+There are approximately 6–8 occurrences across the page renderers.
 
 ---
 
-## PDF Output
+## Design System
 
-- **Page size**: 794 × 1123 px (A4 at 96 dpi)
-- **Pages**: Cover → Executive Summary → Objectives → Services/Pricing → Scope → Back Cover
-- **Engine**: html2pdf.js via jsDelivr CDN (requires internet for first PDF export)
+| Token | Value | Used for |
+|-------|-------|---------|
+| Primary red | `#c0392b` | Accents, headings, buttons |
+| Dark | `#1a1a1a` | Body text, dark backgrounds |
+| Light grey | `#f8f8f8` | Page backgrounds, pricing boxes |
+| Font | Inter (Google Fonts) | All text |
 
-### Offline PDF export
-
-If internet access isn't available, download html2pdf.js and host it locally:
-
-```html
-<!-- Replace this CDN line in the <head> -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<!-- With a local copy -->
-<script src="./html2pdf.bundle.min.js"></script>
-```
-
----
-
-## Design Reference
-
-The design is based on `reference-design.pdf` (the original TFG business proposal PDF). Key design decisions:
-
-- **Color**: Crimson `#c0392b`, near-black `#1a1a1a`, light grey `#f8f8f8`
-- **Font**: Inter (Google Fonts CDN)
-- **Cover photo**: diagonal clip via `clip-path: polygon(110px 0, 100% 0, 100% 100%, 0 100%, 0 130px)`
-- **Logo position**: bottom-left of cover (Business Proposal), top-left (Quotation)
+Cover photo areas use `clip-path: polygon(...)` for the diagonal cut effect and `filter: grayscale(100%)` on the image.
 
 ---
 
 ## Browser Compatibility
 
-Tested in Chrome and Safari (macOS). The app uses:
-- CSS `clip-path` — requires a modern browser (Chrome 55+, Safari 13.1+, Firefox 54+)
-- `FileReader` API — for cover image uploads (all modern browsers)
-- `html2pdf.js` — relies on html2canvas + jsPDF under the hood
+Tested in Chrome and Safari (macOS). Requires:
+- CSS `clip-path` — Chrome 55+, Safari 13.1+, Firefox 54+
+- `FileReader` API — all modern browsers
+- `fetch` / `Promise` / `async-await` — all modern browsers
+- PDF.js (CDN) — loaded only when Edit flow is used; requires internet connection on first use
