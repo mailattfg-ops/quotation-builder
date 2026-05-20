@@ -71,6 +71,13 @@ textarea{min-height:80px}
 .feature-row.dual{grid-template-columns:1fr 1fr 1fr auto}
 .feature-row input{font-size:12px}
 .col-header{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;text-align:center}
+/* Multi-table groups */
+.table-group{border:1px solid #eee;border-radius:8px;padding:12px;margin-bottom:10px;background:#fafafa}
+.table-group-header{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.table-group-title{flex:1;font-size:12px;font-weight:600;color:#1a1a1a;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-family:'Inter',sans-serif;background:#fff}
+.table-group-title:focus{outline:none;border-color:#c0392b}
+.btn-remove-table{background:#fee;border:1px solid #fcc;color:#c0392b;border-radius:4px;padding:5px 8px;cursor:pointer;font-size:11px;font-weight:700;transition:all .2s;flex-shrink:0}
+.btn-remove-table:hover{background:#c0392b;color:#fff}
 
 /* ============ PRICING ITEMS ============ */
 .pricing-item{display:grid;grid-template-columns:1fr auto auto;gap:6px;margin-bottom:6px;align-items:center}
@@ -430,8 +437,8 @@ textarea{min-height:80px}
               <input type="text" id="plan2Name" value="Premium Plan" oninput="updatePreview()">
             </div>
           </div>
-          <div class="dynamic-list" id="featuresList"></div>
-          <button class="btn-add" onclick="addFeatureRow()">+ Add Feature Row</button>
+          <div id="tablesContainer"></div>
+          <button class="btn-add" style="width:100%;justify-content:center;margin-top:4px" onclick="addFeatureTable()">+ Add Table</button>
         </div>
         <!-- Service Sections Mode -->
         <div id="sectionsMode" style="display:none">
@@ -576,6 +583,13 @@ function startCreateNew() {
   document.getElementById('landingScreen').style.display = 'none';
   document.getElementById('appShell').style.display = 'flex';
   document.getElementById('editModeBadge').style.display = 'none';
+  // Preview on by default
+  previewVisible = true;
+  document.getElementById('previewPane').style.display = '';
+  document.getElementById('appShell').classList.remove('preview-hidden');
+  document.getElementById('btnTogglePreview').textContent = '✕ Hide Preview';
+  document.getElementById('btnTogglePreview').style.background = '#f5f5f5';
+  updatePreview();
 }
 function startEditFlow() {
   document.getElementById('landingScreen').style.display = 'none';
@@ -728,7 +742,7 @@ function setPlans(mode) {
   document.getElementById('planNamesRow').style.display = mode === 'dual' ? '' : 'none';
   document.getElementById('dualPricingBlock').style.display = mode === 'dual' ? '' : 'none';
   document.getElementById('singlePricingBlock').style.display = mode === 'single' ? '' : 'none';
-  // update feature rows
+  // update all feature rows across all table groups
   document.querySelectorAll('.feature-row').forEach(r => {
     r.classList.toggle('dual', mode === 'dual');
     r.classList.toggle('single', mode === 'single');
@@ -749,8 +763,38 @@ function addObjective(val = '') {
   list.appendChild(div);
 }
 
-function addFeatureRow(feat = '', p1 = '', p2 = '') {
-  const list = document.getElementById('featuresList');
+function addFeatureTable(title = '', rows = []) {
+  const container = document.getElementById('tablesContainer');
+  const group = document.createElement('div');
+  group.className = 'table-group';
+  group.innerHTML = `
+    <div class="table-group-header">
+      <input type="text" class="table-group-title" value="${escAttr(title)}" placeholder="Table title (optional — e.g. Phase 1: Website)" oninput="updatePreview()">
+      <button class="btn-remove-table" onclick="removeTableGroup(this)">✕ Remove Table</button>
+    </div>
+    <div class="dynamic-list table-rows"></div>
+    <button class="btn-add" style="font-size:11px;margin-top:4px" onclick="addFeatureRowToGroup(this)">+ Add Row</button>`;
+  container.appendChild(group);
+  const rowList = group.querySelector('.table-rows');
+  if (rows.length) {
+    rows.forEach(r => addFeatureRowToList(rowList, r.feat, r.p1, r.p2));
+  } else {
+    addFeatureRowToList(rowList);
+  }
+  updatePreview();
+}
+
+function removeTableGroup(btn) {
+  btn.closest('.table-group').remove();
+  updatePreview();
+}
+
+function addFeatureRowToGroup(btn) {
+  const rowList = btn.previousElementSibling;
+  addFeatureRowToList(rowList);
+}
+
+function addFeatureRowToList(list, feat = '', p1 = '', p2 = '') {
   const div = document.createElement('div');
   div.className = `dynamic-item feature-row ${planMode === 'dual' ? 'dual' : 'single'}`;
   div.innerHTML = `<input type="text" value="${escAttr(feat)}" placeholder="Feature / Deliverable" oninput="updatePreview()">
@@ -859,12 +903,17 @@ function loadDefaults() {
    'To ensure scalability, security, and long-term maintainability.']
     .forEach(addObjective);
 
-  // Default features
-  [['Platform', 'As per requirement'], ['Design', 'Custom responsive UI/UX'],
-   ['Technology', 'Industry-standard stack'], ['Mobile Responsiveness', 'Mobile, Tablet, Laptop & Desktop'],
-   ['Admin Panel', 'Full content management access'], ['SEO Setup', 'Basic SEO optimisation'],
-   ['Delivery', 'As agreed'], ['Training', 'Staff training for system management']]
-    .forEach(([f, p]) => addFeatureRow(f, p));
+  // Default features — one table with default rows
+  addFeatureTable('', [
+    {feat:'Platform', p1:'As per requirement', p2:''},
+    {feat:'Design', p1:'Custom responsive UI/UX', p2:''},
+    {feat:'Technology', p1:'Industry-standard stack', p2:''},
+    {feat:'Mobile Responsiveness', p1:'Mobile, Tablet, Laptop & Desktop', p2:''},
+    {feat:'Admin Panel', p1:'Full content management access', p2:''},
+    {feat:'SEO Setup', p1:'Basic SEO optimisation', p2:''},
+    {feat:'Delivery', p1:'As agreed', p2:''},
+    {feat:'Training', p1:'Staff training for system management', p2:''}
+  ]);
 
   // Default assumptions
   ['Pricing may vary slightly based on final design complexity or additional feature requests.',
@@ -897,11 +946,15 @@ function getPricingItems(listId) {
   }).filter(i => i.label || i.value);
 }
 
-function getFeatureRows() {
-  return [...document.querySelectorAll('#featuresList .dynamic-item')].map(row => {
-    const ins = row.querySelectorAll('input');
-    return { feat: ins[0]?.value.trim(), p1: ins[1]?.value.trim(), p2: ins[2]?.value.trim() };
-  }).filter(r => r.feat);
+function getFeatureTables() {
+  return [...document.querySelectorAll('#tablesContainer .table-group')].map(group => {
+    const title = group.querySelector('.table-group-title')?.value.trim() || '';
+    const rows = [...group.querySelectorAll('.table-rows .dynamic-item')].map(row => {
+      const ins = row.querySelectorAll('input');
+      return { feat: ins[0]?.value.trim()||'', p1: ins[1]?.value.trim()||'', p2: ins[2]?.value.trim()||'' };
+    }).filter(r => r.feat);
+    return { title, rows };
+  }).filter(t => t.rows.length);
 }
 
 function getServiceSections() {
@@ -1057,18 +1110,20 @@ function updatePreview() {
   let p3 = `<div class="section-heading"><div class="section-bar"></div><h2>3. Proposed Solution</h2></div>`;
 
   if (serviceMode === 'table') {
-    const features = getFeatureRows();
+    const tables = getFeatureTables();
     const p1Name = planMode==='dual' ? v('plan1Name') || 'Basic Plan' : '';
     const p2Name = planMode==='dual' ? v('plan2Name') || 'Premium Plan' : '';
-    if (planMode === 'dual') {
-      p3 += `<table class="doc-table"><thead><tr><th>Feature / Deliverable</th><th>${esc(p1Name)} <span class="plan-tag">Plan 1</span></th><th>${esc(p2Name)} <span class="plan-tag">Plan 2</span></th></tr></thead><tbody>`;
-      features.forEach(r => { p3 += `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td><td>${esc(r.p2)}</td></tr>`; });
+    tables.forEach(tbl => {
+      if (tbl.title) p3 += `<div class="sub-heading">${esc(tbl.title)}</div>`;
+      if (planMode === 'dual') {
+        p3 += `<table class="doc-table"><thead><tr><th>Feature / Deliverable</th><th>${esc(p1Name)} <span class="plan-tag">Plan 1</span></th><th>${esc(p2Name)} <span class="plan-tag">Plan 2</span></th></tr></thead><tbody>`;
+        tbl.rows.forEach(r => { p3 += `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td><td>${esc(r.p2)}</td></tr>`; });
+      } else {
+        p3 += `<table class="doc-table"><thead><tr><th>Feature / Deliverable</th><th>Details</th></tr></thead><tbody>`;
+        tbl.rows.forEach(r => { p3 += `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td></tr>`; });
+      }
       p3 += '</tbody></table>';
-    } else {
-      p3 += `<table class="doc-table"><thead><tr><th>Feature / Deliverable</th><th>Details</th></tr></thead><tbody>`;
-      features.forEach(r => { p3 += `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td></tr>`; });
-      p3 += '</tbody></table>';
-    }
+    });
   } else {
     const sections = getServiceSections();
     sections.forEach((sec, i) => {
@@ -1284,10 +1339,7 @@ function collectState() {
       const ins = d.querySelectorAll('input');
       return { label: ins[0]?.value.trim()||'', val: ins[1]?.value.trim()||'' };
     }).filter(r => r.label || r.val),
-    features: [...document.querySelectorAll('#featuresList .dynamic-item')].map(d => {
-      const ins = d.querySelectorAll('input');
-      return { feat: ins[0]?.value.trim()||'', p1: ins[1]?.value.trim()||'', p2: ins[2]?.value.trim()||'' };
-    }).filter(r => r.feat),
+    tables: getFeatureTables(),
     sections: getServiceSections(),
     frontCoverImg: frontCoverImg || null,
     backCoverImg: backCoverImg || null,
@@ -1321,8 +1373,15 @@ function restoreState(data) {
   (data.charges || []).forEach(r => addChargeRow(r.label, r.val));
   document.getElementById('summaryList').innerHTML = '';
   (data.summaryRows || []).forEach(r => addSummaryRow(r.label, r.val));
-  document.getElementById('featuresList').innerHTML = '';
-  (data.features || []).forEach(r => addFeatureRow(r.feat, r.p1, r.p2));
+  document.getElementById('tablesContainer').innerHTML = '';
+  if (data.tables && data.tables.length) {
+    data.tables.forEach(t => addFeatureTable(t.title, t.rows));
+  } else if (data.features && data.features.length) {
+    // backwards-compat: old PDFs saved a flat features array
+    addFeatureTable('', data.features);
+  } else {
+    addFeatureTable();
+  }
   document.getElementById('sectionsList').innerHTML = '';
   (data.sections || []).forEach(s => addServiceSection(s.name, s.desc, s.items, s.timeline, s.cost));
 
@@ -1377,7 +1436,11 @@ async function handleEditPdfUpload(input) {
       document.getElementById('editUploadScreen').style.display = 'none';
       document.getElementById('appShell').style.display = 'flex';
       document.getElementById('editModeBadge').style.display = '';
-      document.getElementById('appShell').classList.add('preview-hidden');
+      previewVisible = true;
+      document.getElementById('previewPane').style.display = '';
+      document.getElementById('appShell').classList.remove('preview-hidden');
+      document.getElementById('btnTogglePreview').textContent = '✕ Hide Preview';
+      document.getElementById('btnTogglePreview').style.background = '#f5f5f5';
       restoreState(state);
       procEl.style.display = 'none';
     } catch(e) {
