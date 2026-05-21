@@ -1067,6 +1067,169 @@ function renderBackCover(data) {
 }
 
 // ============================================================
+// PAGINATION ENGINE
+// ============================================================
+const PAGE_USABLE_H = 992; // 1123 total − 36 header − 31 footer − 64 padding (32×2)
+
+/** Render htmlString in a hidden, correctly-sized div and return offsetHeight of each top-level child. */
+function measureHTML(htmlString) {
+  const div = document.createElement('div');
+  // 714px = 794px page width − 80px horizontal padding (40px each side)
+  div.style.cssText = 'position:fixed;left:-9999px;top:0;width:714px;visibility:hidden;z-index:-1';
+  div.innerHTML = htmlString;
+  document.body.appendChild(div);
+  const heights = [...div.children].map(el => el.offsetHeight);
+  div.remove();
+  return heights;
+}
+
+/** Render a full table string in a hidden div and return thead height + per-row heights. */
+function measureTable(fullTableHTML) {
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:-9999px;top:0;width:714px;visibility:hidden;z-index:-1';
+  div.innerHTML = fullTableHTML;
+  document.body.appendChild(div);
+  const tbl = div.querySelector('table');
+  const theadH = tbl ? tbl.querySelector('thead').offsetHeight : 0;
+  const rowHeights = tbl ? [...tbl.querySelectorAll('tbody tr')].map(tr => tr.offsetHeight) : [];
+  div.remove();
+  return { theadH, rowHeights };
+}
+
+/**
+ * Build paginated "Proposed Solution" pages for Feature Table mode.
+ * Returns an array of rendered page HTML strings (each a full .doc-page).
+ */
+function buildFeaturePages(tables, p1Name, p2Name, startPageNum, data) {
+  const isDual = planMode === 'dual';
+
+  function theadOpenHTML(tblTitle, isCont) {
+    let h = '';
+    if (tblTitle) {
+      h += isCont
+        ? `<div class="sub-heading">${esc(tblTitle)} <em style="font-weight:400;color:#aaa;font-size:10px">(cont.)</em></div>`
+        : `<div class="sub-heading">${esc(tblTitle)}</div>`;
+    }
+    h += '<table class="doc-table"><thead><tr>';
+    if (isDual) {
+      h += `<th>Feature / Deliverable</th><th>${esc(p1Name)} <span class="plan-tag">Plan 1</span></th><th>${esc(p2Name)} <span class="plan-tag">Plan 2</span></th>`;
+    } else {
+      h += '<th>Feature / Deliverable</th><th>Details</th>';
+    }
+    h += '</tr></thead><tbody>';
+    return h;
+  }
+
+  function rowHTML(r) {
+    return isDual
+      ? `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td><td>${esc(r.p2)}</td></tr>`
+      : `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td></tr>`;
+  }
+
+  const SECTION_HDG = `<div class="section-heading"><div class="section-bar"></div><h2>3. Proposed Solution</h2></div>`;
+  const hdgH = measureHTML(SECTION_HDG)[0] || 44;
+
+  const pages = [];       // finished page content strings
+  let pageContent = SECTION_HDG;
+  let pageH = hdgH;
+
+  tables.forEach(tbl => {
+    if (!tbl.rows.length) return;
+
+    // Build full table HTML for measurement
+    let fullHTML = '<table class="doc-table"><thead><tr>';
+    if (isDual) {
+      fullHTML += `<th>Feature / Deliverable</th><th>${esc(p1Name)}</th><th>${esc(p2Name)}</th>`;
+    } else {
+      fullHTML += '<th>Feature / Deliverable</th><th>Details</th>';
+    }
+    fullHTML += '</tr></thead><tbody>';
+    tbl.rows.forEach(r => { fullHTML += rowHTML(r); });
+    fullHTML += '</tbody></table>';
+
+    const { theadH, rowHeights } = measureTable(fullHTML);
+
+    // Measure sub-heading
+    let subH = 0;
+    if (tbl.title) {
+      subH = measureHTML(`<div class="sub-heading">${esc(tbl.title)}</div>`)[0] || 28;
+    }
+
+    // If (sub-heading + thead) doesn't fit, flush current page
+    if (pageH + subH + theadH > PAGE_USABLE_H) {
+      pages.push(pageContent);
+      pageContent = '';
+      pageH = 0;
+    }
+
+    // Open table (first occurrence, no "(cont.)")
+    pageContent += theadOpenHTML(tbl.title, false);
+    pageH += subH + theadH;
+
+    // Add rows, paginating as needed
+    tbl.rows.forEach((r, i) => {
+      const rH = rowHeights[i] || 28;
+      if (pageH + rH > PAGE_USABLE_H) {
+        pageContent += '</tbody></table>';
+        pages.push(pageContent);
+        // New continuation page
+        pageContent = theadOpenHTML(tbl.title, true);
+        pageH = subH + theadH;
+      }
+      pageContent += rowHTML(r);
+      pageH += rH;
+    });
+
+    pageContent += '</tbody></table>';
+  });
+
+  if (pageContent) pages.push(pageContent);
+  if (!pages.length) pages.push(SECTION_HDG + '<div class="body-text" style="color:#aaa">No features added yet.</div>');
+
+  return pages.map((c, i) => renderInnerPage(data, c, startPageNum + i));
+}
+
+/**
+ * Build paginated "Proposed Solution" pages for Service Sections mode.
+ * Returns an array of rendered page HTML strings.
+ */
+function buildSectionPages(sections, startPageNum, data) {
+  const SECTION_HDG = `<div class="section-heading"><div class="section-bar"></div><h2>3. Proposed Solution</h2></div>`;
+  const hdgH = measureHTML(SECTION_HDG)[0] || 44;
+
+  const pages = [];
+  let pageContent = SECTION_HDG;
+  let pageH = hdgH;
+
+  sections.forEach(sec => {
+    let secHTML = `<div class="sub-heading">${esc(sec.name)}</div>`;
+    if (sec.desc) secHTML += `<div class="body-text">${nl2br(sec.desc)}</div>`;
+    if (sec.items.length) secHTML += `<ul class="bullet-list">${sec.items.map(b => `<li>${esc(b)}</li>`).join('')}</ul>`;
+    if (sec.timeline || sec.cost) {
+      secHTML += `<div style="font-size:11px;margin-bottom:12px">`;
+      if (sec.timeline) secHTML += `<strong>Timeline:</strong> ${esc(sec.timeline)}&nbsp;&nbsp;&nbsp;`;
+      if (sec.cost) secHTML += `<strong>Cost:</strong> ${esc(sec.cost)}`;
+      secHTML += `</div>`;
+    }
+
+    const secH = measureHTML(secHTML).reduce((a, b) => a + b, 0) || 60;
+
+    if (pageH + secH > PAGE_USABLE_H && pageContent !== SECTION_HDG) {
+      pages.push(pageContent);
+      pageContent = '';
+      pageH = 0;
+    }
+    pageContent += secHTML;
+    pageH += secH;
+  });
+
+  if (pageContent) pages.push(pageContent);
+  if (!pages.length) pages.push(SECTION_HDG + '<div class="body-text" style="color:#aaa">No sections added yet.</div>');
+
+  return pages.map((c, i) => renderInnerPage(data, c, startPageNum + i));
+}
+
+// ============================================================
 // PREVIEW BUILDER
 // ============================================================
 function updatePreview() {
@@ -1106,41 +1269,21 @@ function updatePreview() {
   }
   pages.push(renderInnerPage(data, p2, 2));
 
-  // Page 3: Services / Features
-  let p3 = `<div class="section-heading"><div class="section-bar"></div><h2>3. Proposed Solution</h2></div>`;
-
+  // Pages 3+: Services / Features (auto-paginated)
+  const p1Name = planMode === 'dual' ? v('plan1Name') || 'Basic Plan' : '';
+  const p2Name = planMode === 'dual' ? v('plan2Name') || 'Premium Plan' : '';
+  let solutionPages;
   if (serviceMode === 'table') {
     const tables = getFeatureTables();
-    const p1Name = planMode==='dual' ? v('plan1Name') || 'Basic Plan' : '';
-    const p2Name = planMode==='dual' ? v('plan2Name') || 'Premium Plan' : '';
-    tables.forEach(tbl => {
-      if (tbl.title) p3 += `<div class="sub-heading">${esc(tbl.title)}</div>`;
-      if (planMode === 'dual') {
-        p3 += `<table class="doc-table"><thead><tr><th>Feature / Deliverable</th><th>${esc(p1Name)} <span class="plan-tag">Plan 1</span></th><th>${esc(p2Name)} <span class="plan-tag">Plan 2</span></th></tr></thead><tbody>`;
-        tbl.rows.forEach(r => { p3 += `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td><td>${esc(r.p2)}</td></tr>`; });
-      } else {
-        p3 += `<table class="doc-table"><thead><tr><th>Feature / Deliverable</th><th>Details</th></tr></thead><tbody>`;
-        tbl.rows.forEach(r => { p3 += `<tr><td>${esc(r.feat)}</td><td>${esc(r.p1)}</td></tr>`; });
-      }
-      p3 += '</tbody></table>';
-    });
+    solutionPages = buildFeaturePages(tables, p1Name, p2Name, 3, data);
   } else {
     const sections = getServiceSections();
-    sections.forEach((sec, i) => {
-      p3 += `<div class="sub-heading">${esc(sec.name)}</div>`;
-      if (sec.desc) p3 += `<div class="body-text">${nl2br(sec.desc)}</div>`;
-      if (sec.items.length) p3 += `<ul class="bullet-list">${sec.items.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`;
-      if (sec.timeline || sec.cost) {
-        p3 += `<div style="font-size:11px;margin-bottom:12px">`;
-        if (sec.timeline) p3 += `<strong>Timeline:</strong> ${esc(sec.timeline)}&nbsp;&nbsp;&nbsp;`;
-        if (sec.cost) p3 += `<strong>Cost:</strong> ${esc(sec.cost)}`;
-        p3 += `</div>`;
-      }
-    });
+    solutionPages = buildSectionPages(sections, 3, data);
   }
-  pages.push(renderInnerPage(data, p3, 3));
+  pages.push(...solutionPages);
 
-  // Page 4: Pricing + Scope + Assumptions
+  // Pricing page — number follows dynamically after solution pages
+  const pricingPageNum = 2 + solutionPages.length + 1;
   let p4 = `<div class="section-heading"><div class="section-bar"></div><h2>4. Investment & Pricing</h2></div>`;
   if (planMode === 'single' && serviceMode === 'table') {
     const price = v('price1'); const gst = v('gst1'); const del = v('delivery1');
@@ -1194,8 +1337,10 @@ function updatePreview() {
     p4 += `<ul class="bullet-list">${assumptions.map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`;
   }
 
-  pages.push(renderInnerPage(data, p4, 4));
+  pages.push(renderInnerPage(data, p4, pricingPageNum));
 
+  // Closing page — follows pricing
+  const closingPageNum = pricingPageNum + 1;
   // Page 5: Outcomes + Next Steps + Signature
   let p5 = '';
 
@@ -1228,7 +1373,7 @@ function updatePreview() {
     </div>
   </div>`;
 
-  pages.push(renderInnerPage(data, p5, 5));
+  pages.push(renderInnerPage(data, p5, closingPageNum));
 
   // Back cover
   pages.push(renderBackCover(data));
