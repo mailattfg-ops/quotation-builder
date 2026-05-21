@@ -238,13 +238,57 @@ textarea{min-height:80px}
 
 /* ============ PLAN BADGE ============ */
 .plan-tag{display:inline-block;background:#c0392b;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px;margin-left:6px;vertical-align:middle}
+
+/* ============ VIEWER MODE ============ */
+.app.viewer-mode .sidebar{display:none!important}
+.app.viewer-mode .preview-pane{padding-top:72px!important;flex:1}
+#viewerTopBar{display:none;position:fixed;top:0;left:0;right:0;height:56px;background:#1a1a1a;z-index:300;align-items:center;justify-content:space-between;padding:0 24px;gap:16px;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+#viewerTopBar .vtb-left{display:flex;align-items:center;gap:12px;min-width:0}
+#viewerTopBar .vtb-brand{font-size:11px;font-weight:700;color:#c0392b;letter-spacing:.5px;white-space:nowrap}
+#viewerTopBar .vtb-title{font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+#viewerTopBar .vtb-sep{color:#444;flex-shrink:0}
+#viewerTopBar .vtb-right{display:flex;gap:8px;flex-shrink:0}
+.btn-vtb{padding:8px 14px;border-radius:7px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all .2s;white-space:nowrap}
+.btn-vtb-primary{background:#c0392b;color:#fff}
+.btn-vtb-primary:hover{background:#a93226}
+.btn-vtb-outline{background:transparent;color:#ddd;border:1px solid #444}
+.btn-vtb-outline:hover{background:#2a2a2a;color:#fff}
+#viewerError{display:none;position:fixed;inset:0;background:#f0f2f5;flex-direction:column;align-items:center;justify-content:center;z-index:400;gap:12px}
+#viewerError .ve-icon{font-size:48px}
+#viewerError .ve-title{font-size:20px;font-weight:800;color:#1a1a1a}
+#viewerError .ve-msg{font-size:13px;color:#888;text-align:center;max-width:380px;line-height:1.7}
+#viewerError .ve-btn{margin-top:8px;background:#c0392b;color:#fff;border:none;border-radius:8px;padding:11px 24px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ============ SHARE MODAL ============ */
+#shareModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:700;align-items:center;justify-content:center}
+.share-box{background:#fff;border-radius:16px;padding:32px 28px;width:460px;max-width:calc(100vw - 40px);box-shadow:0 8px 40px rgba(0,0,0,.18)}
+.share-box-icon{font-size:32px;margin-bottom:12px}
+.share-box h3{font-size:17px;font-weight:800;color:#1a1a1a;margin-bottom:6px}
+.share-box p{font-size:12px;color:#888;line-height:1.7;margin-bottom:20px}
+.share-url-row{display:flex;gap:8px;margin-bottom:10px}
+.share-url-input{flex:1;padding:9px 12px;border:1.5px solid #ddd;border-radius:7px;font-family:'Inter',sans-serif;font-size:11px;color:#333;background:#f8f8f8;outline:none}
+.share-url-input:focus{border-color:#c0392b}
+.btn-copy{background:#1a1a1a;color:#fff;border:none;border-radius:7px;padding:9px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-copy:hover{background:#333}
+.btn-copy.copied{background:#2e7d32}
+#shareCopiedMsg{font-size:11px;color:#2e7d32;font-weight:600;display:none;margin-bottom:12px}
+.share-box-footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid #f0f0f0}
+.share-box-note{font-size:10px;color:#bbb;line-height:1.5;max-width:280px}
+.btn-close-share{background:none;border:1px solid #ddd;border-radius:7px;padding:7px 14px;font-family:'Inter',sans-serif;font-size:12px;color:#888;cursor:pointer}
+.btn-close-share:hover{background:#f5f5f5}
+
+/* ============ SHARE BUTTON ============ */
+.btn-share{background:#fff;color:#1a1a1a;border:1px solid #ddd;border-radius:8px;padding:12px 14px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-share:hover{background:#f5f5f5;border-color:#bbb}
+
 /* ============ PRINT ============ */
 @media print {
   @page { size: A4 portrait; margin: 0; }
   body { background: #fff !important; }
   .loading-overlay, .sidebar, .action-bar, .preview-label,
-  #landingScreen, #editUploadScreen { display: none !important; }
+  #landingScreen, #editUploadScreen, #viewerTopBar, #shareModal, #viewerError { display: none !important; }
   .app { display: block; height: auto; overflow: visible; }
+  .app.viewer-mode { display: block; }
   .preview-pane { padding: 0 !important; background: #fff; overflow: visible; display: block !important; }
   .doc-page {
     box-shadow: none !important;
@@ -561,6 +605,7 @@ textarea{min-height:80px}
 
     <div class="action-bar">
       <button class="btn-preview" id="btnTogglePreview" onclick="togglePreview()">◧ Preview</button>
+      <button class="btn-share" id="btnShare" onclick="shareDocument()">🔗 Share</button>
       <button class="btn-generate" onclick="generatePDF()">⬇ Save as PDF</button>
     </div>
   </div><!-- /sidebar -->
@@ -571,6 +616,46 @@ textarea{min-height:80px}
     <div id="docPreview"></div>
   </div>
 </div><!-- /appShell -->
+
+<!-- ========== VIEWER TOP BAR ========== -->
+<div id="viewerTopBar">
+  <div class="vtb-left">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect width="22" height="22" rx="4" fill="#c0392b"/><text x="4" y="16" font-family="serif" font-size="14" fill="#fff" font-weight="bold">T</text></svg>
+    <span class="vtb-brand">Think Forge Global</span>
+    <span class="vtb-sep">|</span>
+    <span class="vtb-title" id="viewerDocTitle">Document Preview</span>
+  </div>
+  <div class="vtb-right">
+    <button class="btn-vtb btn-vtb-outline" onclick="enterEditFromViewer()">✏️ Edit</button>
+    <button class="btn-vtb btn-vtb-primary" onclick="generatePDF()">⬇ Download PDF</button>
+  </div>
+</div>
+
+<!-- ========== VIEWER ERROR ========== -->
+<div id="viewerError">
+  <div class="ve-icon">🔗</div>
+  <div class="ve-title">Link Not Available</div>
+  <div class="ve-msg">This share link may have expired or the document could not be loaded. Ask the sender to generate a new link.</div>
+  <button class="ve-btn" onclick="location.href=location.pathname">← Go to Homepage</button>
+</div>
+
+<!-- ========== SHARE MODAL ========== -->
+<div id="shareModal" onclick="if(event.target===this)closeShareModal()">
+  <div class="share-box">
+    <div class="share-box-icon">🔗</div>
+    <h3>Share Link Ready</h3>
+    <p>Send this link to your supervisor. They can view the full document in any browser — no login, no app, no download needed.</p>
+    <div class="share-url-row">
+      <input type="text" id="shareUrlInput" class="share-url-input" readonly onclick="this.select()">
+      <button class="btn-copy" id="btnCopy" onclick="copyShareLink()">Copy Link</button>
+    </div>
+    <div id="shareCopiedMsg">✓ Copied to clipboard!</div>
+    <div class="share-box-footer">
+      <div class="share-box-note">🔒 The link is private — only people you share it with can open it.</div>
+      <button class="btn-close-share" onclick="closeShareModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ============================================================
@@ -1684,10 +1769,182 @@ function generatePDF() {
 }
 
 // ============================================================
+// SHARE LINK — JSONBin.io storage (private bins, no user auth)
+// ============================================================
+const JSONBIN_KEY = '$2a$10$AERXITRInrpZE4eolxyKsOxnhacWdyToD9uOIyzqGBnQJpGLy6X62';
+const JSONBIN_API = 'https://api.jsonbin.io/v3/b';
+
+async function shareDocument() {
+  const btn = document.getElementById('btnShare');
+  btn.disabled = true;
+  btn.textContent = '⏳ Uploading…';
+
+  // Make sure preview is rendered (state must be up to date)
+  if (!previewVisible) {
+    previewVisible = true;
+    document.getElementById('previewPane').style.display = '';
+    document.getElementById('appShell').classList.remove('preview-hidden');
+    document.getElementById('btnTogglePreview').textContent = '✕ Hide Preview';
+    updatePreview();
+  }
+
+  try {
+    const state = collectState();
+
+    // Strip cover images from the share state — keeps payload tiny (~15 KB vs ~600 KB).
+    // The viewer shows placeholder images and the full PDF still contains them.
+    const shareState = Object.assign({}, state, {
+      frontCoverImg: null,
+      backCoverImg: null,
+      _noImages: true   // flag so viewer can show the notice
+    });
+
+    // X-Bin-Name must be ASCII only — strip any non-ASCII chars from client name
+    const safeName = ('TFG - ' + (state.clientName || 'Document') + ' ' + (state.month || '') + ' ' + (state.year || '')).replace(/[^\x00-\x7F]/g, '');
+
+    const res = await fetch(JSONBIN_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY,
+        'X-Bin-Private': 'true',
+        'X-Bin-Name': safeName
+      },
+      body: JSON.stringify(shareState)
+    });
+
+    if (res.status === 429) throw new Error('rate_limit');
+    if (!res.ok) throw new Error('api_error');
+
+    const json = await res.json();
+    const binId = json.metadata.id;
+    const base = location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/$/, '');
+    const shareUrl = base + '/?view=' + binId;
+    showShareModal(shareUrl);
+  } catch (err) {
+    console.error('[Share] Error:', err);
+    let msg = 'Could not generate the share link. Please check your internet connection and try again, or share the downloaded PDF directly.';
+    if (err.message === 'rate_limit') {
+      msg = 'Too many requests. Please wait a moment and try again.';
+    }
+    alert('⚠️ ' + msg);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔗 Share';
+  }
+}
+
+function showShareModal(url) {
+  document.getElementById('shareUrlInput').value = url;
+  document.getElementById('shareCopiedMsg').style.display = 'none';
+  document.getElementById('btnCopy').textContent = 'Copy Link';
+  document.getElementById('btnCopy').classList.remove('copied');
+  document.getElementById('shareModal').style.display = 'flex';
+}
+
+function closeShareModal() {
+  document.getElementById('shareModal').style.display = 'none';
+}
+
+function copyShareLink() {
+  const input = document.getElementById('shareUrlInput');
+  input.select();
+  try {
+    navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+  } catch (_) {
+    document.execCommand('copy');
+  }
+  const btn = document.getElementById('btnCopy');
+  btn.textContent = '✓ Copied!';
+  btn.classList.add('copied');
+  document.getElementById('shareCopiedMsg').style.display = '';
+}
+
+// ============================================================
+// VIEWER MODE — read-only view from a share link
+// ============================================================
+async function initViewerMode(binId) {
+  // Hide landing, show spinner
+  document.getElementById('landingScreen').style.display = 'none';
+  document.getElementById('editUploadScreen').style.display = 'none';
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.querySelector('.loading-text').textContent = 'Loading document…';
+  overlay.classList.add('show');
+
+  try {
+    const res = await fetch(JSONBIN_API + '/' + binId + '/latest', {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    if (!res.ok) throw new Error('fetch_failed');
+    const json = await res.json();
+    // JSONBin wraps the stored object in a "record" field
+    const state = json.record;
+    if (!state) throw new Error('invalid_bin');
+    overlay.classList.remove('show');
+    enterViewMode(state);
+  } catch (_) {
+    overlay.classList.remove('show');
+    document.getElementById('viewerError').style.display = 'flex';
+  }
+}
+
+function enterViewMode(state) {
+  restoreState(state);
+
+  // Show app shell with sidebar suppressed
+  const appShell = document.getElementById('appShell');
+  appShell.style.display = 'flex';
+  appShell.classList.add('viewer-mode');
+
+  // Populate viewer top bar title
+  const titleParts = [state.clientName || 'Document'];
+  if (state.docSubtitle || state.projectType) titleParts.push(state.docSubtitle || ('Quotation for ' + state.projectType));
+  if (state.month && state.year) titleParts.push(state.month + ' ' + state.year);
+  document.getElementById('viewerDocTitle').textContent = titleParts.join(' · ');
+  document.getElementById('viewerTopBar').style.display = 'flex';
+
+  // If images were stripped for share (to save space), show a notice
+  if (state._noImages) {
+    const notice = document.createElement('div');
+    notice.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:400;background:#1a1a1a;color:#ddd;font-size:11px;padding:10px 16px;border-radius:8px;max-width:300px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+    notice.innerHTML = '🖼️ Cover images are not included in share links. Download the PDF for the complete document with images.';
+    document.body.appendChild(notice);
+    setTimeout(() => notice.remove(), 8000);
+  }
+
+  // Render the document pages
+  previewVisible = true;
+  document.getElementById('previewPane').style.display = '';
+  updatePreview();
+}
+
+function enterEditFromViewer() {
+  // Switch from read-only viewer into full edit mode
+  const appShell = document.getElementById('appShell');
+  appShell.classList.remove('viewer-mode');
+  document.getElementById('viewerTopBar').style.display = 'none';
+  document.getElementById('editModeBadge').style.display = '';
+  document.getElementById('btnTogglePreview').textContent = '✕ Hide Preview';
+  document.getElementById('btnTogglePreview').style.background = '#f5f5f5';
+  // Clean URL so refreshing doesn't re-enter view mode
+  history.replaceState(null, '', location.pathname);
+}
+
+// ============================================================
 // INIT
 // ============================================================
 loadDefaults();
-showLanding();
+
+// Check for ?view= share link before showing landing screen
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const gistId = params.get('view');
+  if (gistId && /^[a-f0-9]{16,}$/i.test(gistId)) {
+    initViewerMode(gistId);
+  } else {
+    showLanding();
+  }
+})();
 </script>
 </body>
 </html>
