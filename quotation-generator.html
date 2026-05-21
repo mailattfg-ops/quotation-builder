@@ -386,6 +386,7 @@ textarea{min-height:80px}
             <div>📷 Click to upload front cover image</div>
             <div id="frontImgName" style="margin-top:4px;font-size:11px;color:#c0392b;display:none"></div>
           </div>
+          <div id="frontImgSize" style="display:none;margin-top:6px;font-size:10px;padding:4px 8px;background:#f0faf0;border-radius:4px;border:1px solid #c8e6c9"></div>
           <button class="btn-remove" id="clearFrontImgBtn" style="display:none;margin-top:6px;width:100%;justify-content:center" onclick="clearFrontImg()">× Remove front image</button>
         </div>
         <div class="field-group">
@@ -395,6 +396,7 @@ textarea{min-height:80px}
             <div>📷 Click to upload back cover image</div>
             <div id="backImgName" style="margin-top:4px;font-size:11px;color:#c0392b;display:none"></div>
           </div>
+          <div id="backImgSize" style="display:none;margin-top:6px;font-size:10px;padding:4px 8px;background:#f0faf0;border-radius:4px;border:1px solid #c8e6c9"></div>
           <button class="btn-remove" id="clearBackImgBtn" style="display:none;margin-top:6px;width:100%;justify-content:center" onclick="clearBackImg()">× Remove back image</button>
         </div>
       </div>
@@ -611,18 +613,66 @@ let planMode = 'single';
 let frontCoverImg = null;
 let backCoverImg = null;
 
+// ── Image compression settings ──────────────────────────────
+// Long edge capped at this pixel count (200 dpi on A4 cover ≈ 1 685 px)
+const IMG_MAX_PX = 1600;
+// JPEG quality — 0.82 is visually indistinguishable from lossless for photos
+const IMG_QUALITY = 0.82;
+
+/**
+ * Compress a raw image data-URL to a canvas-resized JPEG.
+ * - Respects aspect ratio; caps the longest edge at IMG_MAX_PX.
+ * - Fills transparent PNGs with white so JPEG has no black background.
+ * - Calls cb(compressedDataUrl, originalBytes, compressedBytes).
+ */
+function compressImage(dataUrl, cb) {
+  const img = new Image();
+  img.onload = function () {
+    const origBytes = Math.round(dataUrl.length * 0.75); // base64 → approx bytes
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+    if (w > IMG_MAX_PX || h > IMG_MAX_PX) {
+      if (w >= h) { h = Math.round(h * IMG_MAX_PX / w); w = IMG_MAX_PX; }
+      else        { w = Math.round(w * IMG_MAX_PX / h); h = IMG_MAX_PX; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; // white bg for transparent PNGs
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    const result = canvas.toDataURL('image/jpeg', IMG_QUALITY);
+    const compBytes = Math.round(result.length * 0.75);
+    cb(result, origBytes, compBytes);
+  };
+  img.src = dataUrl;
+}
+
+function fmtBytes(b) {
+  return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB'
+       : b >= 1024    ? (b / 1024).toFixed(0) + ' KB'
+       : b + ' B';
+}
+
 const IMG_PLACEHOLDER = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><rect width="600" height="800" fill="#e0e0e0"/><g transform="translate(300,390)"><rect x="-44" y="-34" width="88" height="68" rx="6" fill="none" stroke="#b0b0b0" stroke-width="4"/><circle cx="0" cy="-4" r="18" fill="none" stroke="#b0b0b0" stroke-width="3.5"/><circle cx="0" cy="-4" r="6" fill="#b0b0b0"/><rect x="-11" y="-32" width="22" height="12" rx="3" fill="#b0b0b0"/></g><text x="300" y="460" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#b0b0b0">Upload a cover image</text></svg>');
 
 function handleFrontImg(input) {
   if (!input.files[0]) return;
+  const sizeEl = document.getElementById('frontImgSize');
+  sizeEl.textContent = 'Compressing…';
+  sizeEl.style.display = '';
   const reader = new FileReader();
   reader.onload = e => {
-    frontCoverImg = e.target.result;
-    document.getElementById('frontImgName').textContent = '✓ ' + input.files[0].name;
-    document.getElementById('frontImgName').style.display = '';
-    document.getElementById('frontImgBox').classList.add('has-image');
-    document.getElementById('clearFrontImgBtn').style.display = '';
-    updatePreview();
+    compressImage(e.target.result, (compressed, origB, compB) => {
+      frontCoverImg = compressed;
+      document.getElementById('frontImgName').textContent = '✓ ' + input.files[0].name;
+      document.getElementById('frontImgName').style.display = '';
+      sizeEl.textContent = `Compressed ${fmtBytes(origB)} → ${fmtBytes(compB)} — quality preserved ✓`;
+      sizeEl.style.color = '#2e7d32';
+      document.getElementById('frontImgBox').classList.add('has-image');
+      document.getElementById('clearFrontImgBtn').style.display = '';
+      updatePreview();
+    });
   };
   reader.readAsDataURL(input.files[0]);
 }
@@ -630,20 +680,28 @@ function clearFrontImg() {
   frontCoverImg = null;
   document.getElementById('frontImgInput').value = '';
   document.getElementById('frontImgName').style.display = 'none';
+  document.getElementById('frontImgSize').style.display = 'none';
   document.getElementById('frontImgBox').classList.remove('has-image');
   document.getElementById('clearFrontImgBtn').style.display = 'none';
   updatePreview();
 }
 function handleBackImg(input) {
   if (!input.files[0]) return;
+  const sizeEl = document.getElementById('backImgSize');
+  sizeEl.textContent = 'Compressing…';
+  sizeEl.style.display = '';
   const reader = new FileReader();
   reader.onload = e => {
-    backCoverImg = e.target.result;
-    document.getElementById('backImgName').textContent = '✓ ' + input.files[0].name;
-    document.getElementById('backImgName').style.display = '';
-    document.getElementById('backImgBox').classList.add('has-image');
-    document.getElementById('clearBackImgBtn').style.display = '';
-    updatePreview();
+    compressImage(e.target.result, (compressed, origB, compB) => {
+      backCoverImg = compressed;
+      document.getElementById('backImgName').textContent = '✓ ' + input.files[0].name;
+      document.getElementById('backImgName').style.display = '';
+      sizeEl.textContent = `Compressed ${fmtBytes(origB)} → ${fmtBytes(compB)} — quality preserved ✓`;
+      sizeEl.style.color = '#2e7d32';
+      document.getElementById('backImgBox').classList.add('has-image');
+      document.getElementById('clearBackImgBtn').style.display = '';
+      updatePreview();
+    });
   };
   reader.readAsDataURL(input.files[0]);
 }
@@ -651,6 +709,7 @@ function clearBackImg() {
   backCoverImg = null;
   document.getElementById('backImgInput').value = '';
   document.getElementById('backImgName').style.display = 'none';
+  document.getElementById('backImgSize').style.display = 'none';
   document.getElementById('backImgBox').classList.remove('has-image');
   document.getElementById('clearBackImgBtn').style.display = 'none';
   updatePreview();
