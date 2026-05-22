@@ -1688,6 +1688,18 @@ function restoreState(data) {
     document.getElementById('backImgName').style.display = '';
     document.getElementById('clearBackImgBtn').style.display = '';
   }
+
+  // Show notice if images were stripped (PDFs generated after the compression update)
+  const existingNotice = document.getElementById('noImagesNotice');
+  if (existingNotice) existingNotice.remove();
+  if (data._noImages) {
+    const notice = document.createElement('div');
+    notice.id = 'noImagesNotice';
+    notice.style.cssText = 'margin:10px 0 4px;padding:10px 12px;background:#fff8e1;border:1px solid #ffe082;border-radius:6px;font-size:12px;color:#795548;line-height:1.5';
+    notice.innerHTML = '<strong>⚠️ Cover images not saved in PDF.</strong><br>Please re-upload your front and back cover photos above.';
+    const coversSection = document.getElementById('section-covers');
+    if (coversSection) coversSection.insertBefore(notice, coversSection.firstChild);
+  }
 }
 
 // ============================================================
@@ -1715,12 +1727,39 @@ async function handleEditPdfUpload(input) {
       const START = '__TFG_STATE_START__';
       const END = '__TFG_STATE_END__';
       const si = fullText.indexOf(START);
-      const ei = fullText.indexOf(END);
-      if (si === -1 || ei === -1 || ei <= si) {
-        throw new Error('This PDF was not created with this tool, or the embedded data could not be found. Please use a PDF exported from this application.');
+      // The END marker may appear multiple times (position:fixed shows on every page).
+      // Always use the LAST occurrence so we capture the most complete state chunk.
+      const ei = fullText.lastIndexOf(END);
+
+      if (ei === -1) {
+        throw new Error('This PDF was not created with this tool, or the embedded data is missing. Only PDFs exported from this application can be edited here.');
       }
-      const raw = fullText.slice(si + START.length, ei).replace(/\s+/g, '');
-      const state = JSON.parse(atob(raw));
+
+      let raw;
+      if (si !== -1 && ei > si) {
+        // Happy path — both markers present (new format, top:0 anchor)
+        raw = fullText.slice(si + START.length, ei).replace(/\s+/g, '');
+      } else {
+        // START not found — this is an older PDF where the state text was anchored
+        // at bottom:0 and the START marker was clipped off-page because the state
+        // (with full images) was too tall. We cannot recover the full data.
+        throw new Error(
+          'This PDF was created with an older version of this tool where cover images were stored inside the PDF, making the embedded data too large to read back.\n\n' +
+          'Fix: open the original document on the person who created it\'s device, then click Save as PDF again — the new version stores data correctly and will be editable.'
+        );
+      }
+
+      let state;
+      try {
+        state = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      } catch (_) {
+        try {
+          state = JSON.parse(atob(raw)); // legacy format without encodeURIComponent
+        } catch (e2) {
+          throw new Error('The embedded data could not be decoded. The PDF may be corrupted or was not exported correctly.');
+        }
+      }
+
       procEl.textContent = '✓ Data extracted! Restoring form…';
       document.getElementById('editUploadScreen').style.display = 'none';
       document.getElementById('appShell').style.display = 'flex';
@@ -1753,13 +1792,26 @@ function generatePDF() {
   }
   updatePreview();
 
+  // Strip cover images from the embedded state so the text block stays tiny (~15 KB).
+  // Without stripping, a state with two compressed images is ~800 KB → ~13,000 lines at
+  // 60 chars each → the block is taller than the page → __TFG_STATE_START__ gets clipped
+  // above the top of the page and PDF.js cannot find it on re-edit.
+  // Images can be re-uploaded when editing; all other form data is preserved.
   const state = collectState();
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  const embedState = Object.assign({}, state, {
+    frontCoverImg: null,
+    backCoverImg: null,
+    _noImages: true
+  });
+
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(embedState))));
   const chunks = encoded.match(/.{1,60}/g).join('\n');
   const stateDiv = document.createElement('div');
   stateDiv.id = '__tfg_state_holder__';
   stateDiv.setAttribute('aria-hidden', 'true');
-  stateDiv.style.cssText = 'position:fixed;left:0;bottom:0;font-size:1px;color:#fff;opacity:0.01;pointer-events:none;white-space:pre;z-index:-1';
+  // top:0 ensures __TFG_STATE_START__ is always at the visible top of the element.
+  // bottom:0 was the old (broken) position — it caused START to be clipped off-page.
+  stateDiv.style.cssText = 'position:fixed;left:0;top:0;font-size:1px;color:#fff;opacity:0.01;pointer-events:none;white-space:pre;z-index:-1';
   stateDiv.textContent = '__TFG_STATE_START__\n' + chunks + '\n__TFG_STATE_END__';
   document.body.appendChild(stateDiv);
 
