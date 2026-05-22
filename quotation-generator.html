@@ -82,6 +82,9 @@ textarea{min-height:80px}
 /* ============ PRICING ITEMS ============ */
 .pricing-item{display:grid;grid-template-columns:1fr auto auto;gap:6px;margin-bottom:6px;align-items:center}
 .pricing-item input{font-size:12px}
+.price-row-card{border:1px solid #e0e0e0;border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fafafa}
+.price-row-header{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.price-row-header input{flex:1;font-size:12px}
 
 /* ============ TOGGLE ============ */
 .toggle-group{display:flex;gap:0;margin-bottom:14px;border:1px solid #ddd;border-radius:6px;overflow:hidden}
@@ -503,22 +506,14 @@ textarea{min-height:80px}
       <div class="form-section">
         <div class="form-section-heading">Pricing & Investment</div>
         <div id="singlePricingBlock">
-          <div class="row2">
-            <div class="field-group">
-              <label>Amount (₹)</label>
-              <input type="text" id="price1" placeholder="e.g. 20,000" oninput="updatePreview()">
-            </div>
-            <div class="field-group">
-              <label>+ GST?</label>
-              <select id="gst1" onchange="updatePreview()">
-                <option value="yes">Yes, + GST</option>
-                <option value="no">No GST</option>
-              </select>
-            </div>
+          <div class="dynamic-list" id="priceRowsList"></div>
+          <div style="margin-top:2px">
+            <button class="btn-add" onclick="addPriceRow()">+ Add Price Item</button>
           </div>
-          <div class="field-group">
-            <label>Delivery / Timeline</label>
-            <input type="text" id="delivery1" placeholder="e.g. 10 working days" oninput="updatePreview()">
+          <div id="priceTotalRow" style="display:none;background:#1a1a1a;border-radius:8px;padding:12px 16px;margin-top:10px">
+            <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;text-transform:uppercase;margin-bottom:4px">Total Amount</div>
+            <div id="priceTotalAmt" style="font-size:16px;font-weight:800;color:#fff">₹ —</div>
+            <div id="priceTotalGst" style="display:none;font-size:10px;color:#aaa;margin-top:2px">+ GST applicable</div>
           </div>
         </div>
         <div id="dualPricingBlock" style="display:none">
@@ -1011,6 +1006,78 @@ function addSummaryRow(label = '', val = '') {
   list.appendChild(div);
 }
 
+// ---- Dynamic price rows (Pricing & Investment — single plan mode) ----
+function addPriceRow(label = '', amount = '', gst = 'no', delivery = '') {
+  const list = document.getElementById('priceRowsList');
+  const div = document.createElement('div');
+  div.className = 'price-row-card';
+  div.innerHTML = `
+    <div class="price-row-header">
+      <input type="text" class="price-row-label" value="${escAttr(label)}" placeholder="Item description (e.g. Website Development)" oninput="updatePreview()">
+      <button class="btn-remove-table" onclick="removePriceRow(this)">× Remove</button>
+    </div>
+    <div class="row2" style="margin-bottom:6px">
+      <div class="field-group" style="margin:0">
+        <label>Amount (₹)</label>
+        <input type="text" class="price-row-amount" value="${escAttr(amount)}" placeholder="e.g. 20,000" oninput="updatePreview()">
+      </div>
+      <div class="field-group" style="margin:0">
+        <label>+ GST?</label>
+        <select class="price-row-gst" onchange="updatePreview()">
+          <option value="no"${gst==='no'?' selected':''}>No GST</option>
+          <option value="yes"${gst==='yes'?' selected':''}>Yes, + GST</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-group" style="margin:0">
+      <label>Delivery / Timeline</label>
+      <input type="text" class="price-row-delivery" value="${escAttr(delivery)}" placeholder="e.g. 10 working days" oninput="updatePreview()">
+    </div>`;
+  list.appendChild(div);
+  _syncPriceRowButtons();
+  updatePreview();
+}
+
+function removePriceRow(btn) {
+  btn.closest('.price-row-card').remove();
+  _syncPriceRowButtons();
+  updatePreview();
+}
+
+function _syncPriceRowButtons() {
+  const cards = [...document.querySelectorAll('#priceRowsList .price-row-card')];
+  cards.forEach(c => {
+    c.querySelector('.btn-remove-table').style.display = cards.length <= 1 ? 'none' : '';
+  });
+}
+
+function getPriceRows() {
+  return [...document.querySelectorAll('#priceRowsList .price-row-card')].map(card => ({
+    label:    card.querySelector('.price-row-label')?.value.trim()    || '',
+    amount:   card.querySelector('.price-row-amount')?.value.trim()   || '',
+    gst:      card.querySelector('.price-row-gst')?.value             || 'no',
+    delivery: card.querySelector('.price-row-delivery')?.value.trim() || ''
+  }));
+  // Note: we keep rows even if empty so the user's blank slot isn't lost
+}
+
+function refreshPriceTotalSidebar() {
+  const rows = getPriceRows().filter(r => r.amount);
+  const totalRow = document.getElementById('priceTotalRow');
+  if (!totalRow) return;
+  if (rows.length < 2) { totalRow.style.display = 'none'; return; }
+  let total = 0, anyGst = false, allNumeric = true;
+  rows.forEach(r => {
+    if (r.gst === 'yes') anyGst = true;
+    const n = parseFloat(r.amount.replace(/,/g, ''));
+    if (!isNaN(n)) total += n; else allNumeric = false;
+  });
+  totalRow.style.display = '';
+  document.getElementById('priceTotalAmt').textContent = (allNumeric && total > 0)
+    ? '₹ ' + total.toLocaleString('en-IN') : '₹ —';
+  document.getElementById('priceTotalGst').style.display = anyGst ? '' : 'none';
+}
+
 function addOutcome(val = '') {
   const list = document.getElementById('outcomesList');
   const div = document.createElement('div');
@@ -1058,6 +1125,9 @@ function loadDefaults() {
     {feat:'Delivery', p1:'As agreed', p2:''},
     {feat:'Training', p1:'Staff training for system management', p2:''}
   ]);
+
+  // Default price row (one empty slot so the form is ready to fill)
+  addPriceRow();
 
   // Default assumptions
   ['Pricing may vary slightly based on final design complexity or additional feature requests.',
@@ -1377,6 +1447,7 @@ function buildSectionPages(sections, startPageNum, data) {
 // PREVIEW BUILDER
 // ============================================================
 function updatePreview() {
+  refreshPriceTotalSidebar();
   if (!previewVisible) return;
   const data = {
     clientName: v('clientName') || 'Client Name',
@@ -1429,13 +1500,42 @@ function updatePreview() {
   // Pricing page — number follows dynamically after solution pages
   const pricingPageNum = 2 + solutionPages.length + 1;
   let p4 = `<div class="section-heading"><div class="section-bar"></div><h2>4. Investment & Pricing</h2></div>`;
-  if (planMode === 'single' && serviceMode === 'table') {
-    const price = v('price1'); const gst = v('gst1'); const del = v('delivery1');
-    if (price) {
-      p4 += `<div class="pricing-box"><div class="price-label">Investment</div>
-        <div class="price-main">₹ ${esc(price)}${gst==='yes' ? ' + GST' : ''}</div>
-        ${del ? `<div class="price-delivery">Delivery Time: ${esc(del)}</div>` : ''}
-      </div>`;
+  if (planMode === 'single') {
+    const priceRows = getPriceRows().filter(r => r.amount || r.label || r.delivery);
+    if (priceRows.length === 1) {
+      // Single row — same clean box as before
+      const row = priceRows[0];
+      if (row.amount) {
+        p4 += `<div class="pricing-box">
+          <div class="price-label">${row.label ? esc(row.label) : 'Investment'}</div>
+          <div class="price-main">₹ ${esc(row.amount)}${row.gst==='yes' ? ' + GST' : ''}</div>
+          ${row.delivery ? `<div class="price-delivery">Delivery Time: ${esc(row.delivery)}</div>` : ''}
+        </div>`;
+      }
+    } else if (priceRows.length > 1) {
+      // Multiple rows — table with auto-calculated total
+      let total = 0, anyGst = false, allNumeric = true;
+      priceRows.forEach(r => {
+        if (r.gst === 'yes') anyGst = true;
+        const n = parseFloat(r.amount.replace(/,/g, ''));
+        if (!isNaN(n) && r.amount) total += n; else if (r.amount) allNumeric = false;
+      });
+      p4 += `<table class="doc-table"><thead><tr><th>Item</th><th>Amount</th><th>Timeline</th></tr></thead><tbody>`;
+      priceRows.forEach(r => {
+        p4 += `<tr>
+          <td>${esc(r.label) || '—'}</td>
+          <td>${r.amount ? '₹ ' + esc(r.amount) + (r.gst === 'yes' ? ' + GST' : '') : '—'}</td>
+          <td>${esc(r.delivery) || '—'}</td>
+        </tr>`;
+      });
+      if (allNumeric && total > 0) {
+        p4 += `<tr class="highlight-row">
+          <td><strong>Total</strong></td>
+          <td><strong>₹ ${total.toLocaleString('en-IN')}${anyGst ? ' + GST' : ''}</strong></td>
+          <td>—</td>
+        </tr>`;
+      }
+      p4 += `</tbody></table>`;
     }
   } else if (planMode === 'dual') {
     const p1n = v('plan1Name')||'Basic Plan', p2n = v('plan2Name')||'Premium Plan';
@@ -1531,9 +1631,7 @@ function updatePreview() {
 // ============================================================
 function renderInitialQuotation(data) {
   const deliverables = [...document.querySelectorAll('#deliverablesList .dynamic-item input')].map(i => i.value.trim()).filter(Boolean);
-  const price = v('price1');
-  const gst = v('gst1');
-  const delivery = v('delivery1');
+  const priceRows = getPriceRows().filter(r => r.amount || r.label || r.delivery);
   const overview = v('overviewText');
   const nextSteps = v('nextStepsText');
   const subtitle = data.docSubtitle || (data.projectType ? 'Quotation for ' + data.projectType : 'Initial Quotation');
@@ -1570,18 +1668,42 @@ function renderInitialQuotation(data) {
     p1 += `</div>`;
   }
 
-  if (price) {
+  if (priceRows.length === 1 && priceRows[0].amount) {
+    const row = priceRows[0];
     p1 += `<div style="display:flex;gap:14px;margin-bottom:24px">
       <div style="flex:1;background:#1a1a1a;border-radius:10px;padding:18px 22px;color:#fff">
-        <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:6px">Total Investment</div>
-        <div style="font-size:24px;font-weight:900">₹ ${esc(price)}</div>
-        ${gst === 'yes' ? '<div style="font-size:10px;color:#888;margin-top:3px">+ GST applicable</div>' : ''}
+        <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:6px">${row.label ? esc(row.label) : 'Total Investment'}</div>
+        <div style="font-size:24px;font-weight:900">₹ ${esc(row.amount)}</div>
+        ${row.gst === 'yes' ? '<div style="font-size:10px;color:#888;margin-top:3px">+ GST applicable</div>' : ''}
       </div>
-      ${delivery ? `<div style="flex:1;background:#f8f0f0;border:1px solid #e8c0c0;border-radius:10px;padding:18px 22px">
+      ${row.delivery ? `<div style="flex:1;background:#f8f0f0;border:1px solid #e8c0c0;border-radius:10px;padding:18px 22px">
         <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#c0392b;margin-bottom:6px">Timeline</div>
-        <div style="font-size:20px;font-weight:800;color:#1a1a1a">${esc(delivery)}</div>
+        <div style="font-size:20px;font-weight:800;color:#1a1a1a">${esc(row.delivery)}</div>
       </div>` : ''}
     </div>`;
+  } else if (priceRows.length > 1) {
+    let total = 0, anyGst = false, allNumeric = true;
+    priceRows.forEach(r => {
+      if (r.gst === 'yes') anyGst = true;
+      const n = parseFloat(r.amount.replace(/,/g, ''));
+      if (!isNaN(n) && r.amount) total += n; else if (r.amount) allNumeric = false;
+    });
+    p1 += `<div style="margin-bottom:24px">`;
+    priceRows.forEach(r => {
+      if (!r.amount && !r.label) return;
+      p1 += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#f8f8f8;border-radius:6px;margin-bottom:6px;font-size:11px">
+        <span style="color:#333;font-weight:600">${esc(r.label) || 'Item'}</span>
+        <span style="color:#1a1a1a;font-weight:700">₹ ${esc(r.amount)}${r.gst==='yes'?' + GST':''}</span>
+        ${r.delivery ? `<span style="color:#888;font-size:10px">${esc(r.delivery)}</span>` : ''}
+      </div>`;
+    });
+    if (allNumeric && total > 0) {
+      p1 += `<div style="background:#1a1a1a;border-radius:10px;padding:14px 18px;color:#fff;margin-top:8px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:4px">Total Investment</div>
+        <div style="font-size:22px;font-weight:900">₹ ${total.toLocaleString('en-IN')}${anyGst?' + GST':''}</div>
+      </div>`;
+    }
+    p1 += `</div>`;
   }
 
   if (nextSteps) {
@@ -1611,7 +1733,11 @@ function collectState() {
     docSubtitle: v('docSubtitle'), overviewText: v('overviewText'),
     scopeText: v('scopeText'), nextStepsText: v('nextStepsText'),
     closingNote: v('closingNote'),
-    price1: v('price1'), gst1: v('gst1'), delivery1: v('delivery1'),
+    priceRows: getPriceRows(),
+    // Legacy fields for old PDFs — derived from first row
+    price1: getPriceRows()[0]?.amount || '',
+    gst1: getPriceRows()[0]?.gst || 'no',
+    delivery1: getPriceRows()[0]?.delivery || '',
     price1dual: v('price1dual'), delivery1dual: v('delivery1dual'),
     price2dual: v('price2dual'), delivery2dual: v('delivery2dual'),
     plan1Name: v('plan1Name'), plan2Name: v('plan2Name'),
@@ -1641,14 +1767,23 @@ function restoreState(data) {
   setPlans(data.planMode || 'single');
 
   ['clientName','projectType','month','year','preparedFor','location','docSubtitle',
-   'overviewText','scopeText','nextStepsText','closingNote','price1','delivery1',
+   'overviewText','scopeText','nextStepsText','closingNote',
    'price1dual','delivery1dual','price2dual','delivery2dual','plan1Name','plan2Name',
    'monthlyRetainer','retainerNote'].forEach(id => {
     const el = document.getElementById(id);
     if (el && data[id] !== undefined) el.value = data[id];
   });
-  const gstEl = document.getElementById('gst1');
-  if (gstEl && data.gst1) gstEl.value = data.gst1;
+
+  // Restore price rows — support new format (priceRows array) and old format (price1/gst1/delivery1)
+  document.getElementById('priceRowsList').innerHTML = '';
+  if (data.priceRows && data.priceRows.length) {
+    data.priceRows.forEach(r => addPriceRow(r.label || '', r.amount || '', r.gst || 'no', r.delivery || ''));
+  } else if (data.price1 || data.delivery1) {
+    // Backward compat: old single-field format
+    addPriceRow('', data.price1 || '', data.gst1 || 'no', data.delivery1 || '');
+  } else {
+    addPriceRow(); // ensure at least one empty row
+  }
 
   document.getElementById('objectivesList').innerHTML = '';
   (data.objectives || []).forEach(addObjective);
